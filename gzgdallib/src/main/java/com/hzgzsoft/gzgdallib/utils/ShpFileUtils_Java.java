@@ -16,6 +16,7 @@ import org.gdal.ogr.Layer;
 import org.gdal.ogr.ogr;
 
 import java.io.File;
+import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Vector;
@@ -293,5 +294,28 @@ public class ShpFileUtils_Java {
 
     }
 
+
+    //https://blog.csdn.net/qq_34045114/article/details/84133815
+    public static String str2HexStr(String origin,String charsetName) throws UnsupportedEncodingException {
+        byte[] bytes = origin.getBytes(charsetName);
+        String hex = bytesToHexString(bytes);
+        return hex;
+    }
+
+    private static String bytesToHexString(byte[] src) {
+        StringBuilder stringBuilder = new StringBuilder("");
+        if (src == null || src.length <= 0) {
+            return null;
+        }
+        for (int i = 0; i < src.length; i++) {
+            int v = src[i] & 0xFF;
+            String hv = Integer.toHexString(v);
+            if (hv.length() < 2) {
+                stringBuilder.append(0);
+            }
+            stringBuilder.append(hv);
+        }
+        return stringBuilder.toString();
+    }
 
 }

@@ -93,8 +93,8 @@ object ShpFileUtils {
                 oLayer.CreateField(oFieldID)
 
                 // 再创建一个叫FeatureName的字符型属性，字符长度为50
-                val oFieldName =
-                    FieldDefn(String("Remark".toByteArray(), StandardCharsets.UTF_8), ogr.OFTString)
+                val oFieldName = FieldDefn(String("Remark".toByteArray(), StandardCharsets.UTF_8), ogr.OFTString)
+//                val oFieldName = FieldDefn(ShpFileUtils_Java.str2HexStr("备注","GBK"), ogr.OFTString)
                 oFieldName.SetWidth(100)
                 oLayer.CreateField(oFieldName)
 
@@ -118,9 +118,10 @@ object ShpFileUtils {
                     index++
                     val oFeatureTriangle = Feature(oDefn)
                     oFeatureTriangle.SetField(0, index)
-                    oFeatureTriangle.SetField(
+                    oFeatureTriangle.SetFieldBinaryFromHexString(
                         1,
-                        String(dataList[i].remark.toByteArray(), StandardCharsets.UTF_8)
+//                        String(dataList[i].remark.toByteArray(), StandardCharsets.UTF_8)
+                        ShpFileUtils_Java.str2HexStr(dataList[i].remark,"GBK")
                     )
                     oFeatureTriangle.SetField(
                         2,
@@ -259,7 +260,7 @@ object ShpFileUtils {
                 } else {
                     result += ""
                 }
-                Log.e("yimi", "pointsToWktString(线): $result")
+//                Log.e("yimi", "pointsToWktString(线): $result")
                 return result
 
 
@@ -310,7 +311,7 @@ object ShpFileUtils {
                 } else {
                     result += ")"
                 }
-                Log.e("yimi", "pointsToWktString(面): $result")
+//                Log.e("yimi", "pointsToWktString(面): $result")
                 return result
             }
         } catch (e: Exception) {

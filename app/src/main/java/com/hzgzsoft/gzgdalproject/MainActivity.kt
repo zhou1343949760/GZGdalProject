@@ -65,7 +65,7 @@ class MainActivity : AppCompatActivity() {
 
 
 //        ShpFileUtils_Java.createShp_BySecond_Polygon(this, path,"测试数据_面.shp", dataList)
-        ShpFileUtils.createShp_BySecond_Polygon(this,path,"测试数据_面.shp",dataList)
+        ShpFileUtils.createShp_BySecond_Polygon(this,path,"测试数据_面06.shp",dataList)
 
 
 
