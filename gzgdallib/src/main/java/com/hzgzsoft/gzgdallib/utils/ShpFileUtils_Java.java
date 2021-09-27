@@ -17,15 +17,304 @@ import org.gdal.ogr.ogr;
 
 import java.io.File;
 import java.io.UnsupportedEncodingException;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Vector;
+import java.util.regex.Pattern;
 
 /**
  * Created by yimi
  * on 2020/9/13
  */
 public class ShpFileUtils_Java {
+
+
+
+
+    public static String createShpByList(Context context,String path,String fileName, Class c,
+                                         List<Object> dataList,boolean showAlertDialog, boolean showProgressDialog,
+                                         String pointsName, String ftypeName, List<String> excludeList, boolean isforPC){
+        try {
+            if (path == null || path.isEmpty()) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "path参数异常,导出失败");
+                }
+                return "path参数异常,导出失败";
+            }
+
+            File file = new File(path);
+            if (!file.exists()) {
+                boolean isSuccess = file.mkdirs();
+                if (!isSuccess) {
+                    if (showAlertDialog) {
+                        AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "导出文件夹生成失败,导出失败");
+                    }
+                    return "导出文件夹生成失败,导出失败";
+                }
+            }
+
+            if (fileName == null || fileName.isEmpty()) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "文件名为空,导出失败");
+                }
+                return "文件名为空,导出失败";
+            }
+
+            if (dataList == null || dataList.isEmpty()) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "传入数据为空,导出失败");
+                }
+                return "传入数据为空,导出失败";
+            }
+
+            if (c == null) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "传入class异常,导出失败");
+                }
+                return "传入class异常,导出失败";
+            }
+
+            if (!fileName.endsWith(".shp")) {
+                fileName += ".shp";
+            }
+
+
+            ogr.RegisterAll();
+            gdal.SetConfigOption("GDAL_FILENAME_IS_UTF8", "YES");
+            gdal.SetConfigOption("SHAPE_ENCODING", "UTF-8");
+
+            String strDriverName = "ESRI Shapefile";
+            org.gdal.ogr.Driver oDriver = ogr.GetDriverByName(strDriverName);
+            if (oDriver == null) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "驱动不可用,导出失败");
+                }
+                return "驱动不可用,导出失败";
+            }
+
+            Vector<String> options = new Vector<>();
+            options.add("ENCODING=UTF-8");
+            String shpPath = path + fileName;
+
+            Log.e("yimi", "createShpByList: " + shpPath );
+
+            DataSource oDS = oDriver.CreateDataSource(shpPath, options);
+            if (oDS == null) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "创建矢量文件失败,导出失败");
+                }
+                return "创建矢量文件失败,导出失败";
+            }
+            oDS.FlushCache();
+            org.gdal.osr.SpatialReference srs = new org.gdal.osr.SpatialReference();
+            srs.ImportFromWkt("GEOGCS[\"GCS_China_Geodetic_Coordinate_System_2000\",DATUM[\"D_China_2000\",SPHEROID[\"CGCS_2000\",6378137,298.257222101]],PRIMEM[\"Greenwich\",0],UNIT[\"DEGREE\",0.017453292519943295]]");
+            Layer oLayer = oDS.CreateLayer("1", srs, ogr.wkbPolygon, null);
+            if (oLayer == null) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "图层创建失败,导出失败");
+                }
+                return "图层创建失败,导出失败";
+            }
+
+            if (pointsName == null || pointsName.isEmpty()) {
+                pointsName = "Points";
+            }
+            if (ftypeName == null || ftypeName.isEmpty()) {
+                ftypeName = "FType";
+            }
+            if (excludeList == null) {
+                excludeList = new ArrayList<>();
+            }
+
+
+            Field[] fields = c.getDeclaredFields();
+            List<Field> fieldList = new ArrayList<>(); //生成到表里面的字段才加到这个集合(getDeclaredFields会获取到构造函数等,需去除)
+
+
+            //检查是否有points字段
+            boolean hasPoints = false;//是否有points字段
+            boolean hasFtype = false;//是否有ftype字段(无则按照面处理)
+            for (int i = 0; i < fields.length; i++) {
+                if (pointsName.equals(fields[i].getName())) {
+                    hasPoints = true;
+                }
+                if (ftypeName.equals(fields[i].getName())) {
+                    hasFtype = true;
+                }
+
+
+                //仅导出String int double 等类型(集合里面有些是方法名等不需要的,如 android.os.Parcelable$Creator<com.hzgzsoft.gzgdallib.model.Map_Feature> )
+                if (!("class java.lang.String".equals(fields[i].getGenericType().toString())
+                        || "class java.lang.Integer".equals(fields[i].getGenericType().toString())
+//                        || "class java.lang.Double".equals(fields[i].getGenericType().toString())
+                        || "int".equals(fields[i].getGenericType().toString())
+//                        || "double".equals(fields[i].getGenericType().toString())
+//                        || "boolean".equals(fields[i].getGenericType().toString())
+                )) {
+                    continue;
+                }
+
+//                if (!(
+//                        fields[i].getName().equals("Number")
+//                   ||     fields[i].getName().equals("FType")
+//                   ||     fields[i].getName().equals("Points")
+//                   ||     fields[i].getName().equals("Remark")
+//                )) {
+//                    continue;
+//                }
+
+                //points字段可能超长
+                if (fields[i].getName().equals("Points")
+                        || fields[i].getName().equals(pointsName)
+
+//                        || fields[i].getName().equals("Area")
+//                        || fields[i].getName().equals("Ftype")
+                ) {
+                    continue;
+                }
+
+                if (!excludeList.contains(fields[i].getName())) {
+                    //不在排除集合的属性,才加入集合
+                    fieldList.add(fields[i]);
+                }
+            }
+
+
+            if (!hasPoints) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "传入数据无points字段,导出失败");
+                }
+                return "传入数据无points字段,导出失败";
+            }
+
+
+            //创建属性表
+            for (int i = 0; i < fieldList.size(); i++) {
+//                Log.e("yimi", "createShpFile_属性名: " + fieldList.get(i).getName());
+//                Log.e("yimi", "createShpFile_类型: " + fieldList.get(i).getGenericType());
+
+                if ("class java.lang.String".equals(fieldList.get(i).getGenericType().toString())) {
+                    Log.i("yimi", "createShpFile_String: " + fieldList.get(i).getName());
+                    FieldDefn oFieldName = new FieldDefn(new String(fieldList.get(i).getName().getBytes(), StandardCharsets.UTF_8), ogr.OFTString);
+                    oFieldName.SetWidth(254);
+                    oFieldName.SetNullable(1);
+                    oLayer.CreateField(oFieldName);
+
+                } else if ("class java.lang.Integer".equals(fieldList.get(i).getGenericType().toString()) || "int".equals(fieldList.get(i).getGenericType().toString())) {
+                    Log.i("yimi", "createShpFile_int: " + fieldList.get(i).getName());
+                    FieldDefn oFieldName = new FieldDefn(new String(fieldList.get(i).getName().getBytes(), StandardCharsets.UTF_8), ogr.OFTInteger);
+                    oFieldName.SetNullable(1);
+                    oLayer.CreateField(oFieldName);
+
+                } else if ("class java.lang.Double".equals(fieldList.get(i).getGenericType().toString()) || "double".equals(fieldList.get(i).getGenericType().toString())) {
+                    Log.i("yimi", "createShpFile_double: " + fieldList.get(i).getName());
+                    FieldDefn oFieldName = new FieldDefn(new String(fieldList.get(i).getName().getBytes(), StandardCharsets.UTF_8), ogr.OFSTFloat32);
+                    oFieldName.SetNullable(1);
+                    oLayer.CreateField(oFieldName);
+
+                }else if ("class java.lang.Boolean".equals(fieldList.get(i).getGenericType().toString()) || "boolean".equals(fieldList.get(i).getGenericType().toString())) {
+                    Log.i("yimi", "createShpFile_boolean: " + fieldList.get(i).getName());
+                    FieldDefn oFieldName = new FieldDefn(new String(fieldList.get(i).getName().getBytes(), StandardCharsets.UTF_8), ogr.OFSTBoolean);
+                    oFieldName.SetNullable(1);
+                    oLayer.CreateField(oFieldName);
+                }
+            }
+
+
+            FeatureDefn oDefn = oLayer.GetLayerDefn();
+            //写入数据
+            for (int i = 0; i < dataList.size(); i++) {
+                Feature feature = new Feature(oDefn);
+                for (int j = 0; j < fieldList.size(); j++) {
+//                    feature.SetField(0, j);
+//                    feature.SetField(1, new String(dataList.get(i).getRemark().getBytes(), StandardCharsets.UTF_8));
+//                    feature.SetField(2, new String(dataList.get(i).getNumber().getBytes(), StandardCharsets.UTF_8));
+
+                    if ("class java.lang.String".equals(fieldList.get(j).getGenericType().toString())) {
+                        Method m = c.getMethod("get" + upperCase(fieldList.get(j).getName()));
+                        String val = (String) m.invoke(dataList.get(i));// 调用getter方法获取属性值
+                        if (val != null) {
+                            if (isforPC) {
+                                feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "GBK"));
+                            } else {
+                                feature.SetField(j, new String(val.getBytes(), StandardCharsets.UTF_8));
+                            }
+                        } else {
+                            if (isforPC) {
+                                feature.SetFieldNull(j);
+                            } else {
+                                feature.SetFieldNull(j);
+                            }
+                        }
+                    } else if ("class java.lang.Integer".equals(fieldList.get(j).getGenericType().toString()) || "int".equals(fieldList.get(j).getGenericType().toString())) {
+                        Method m = c.getMethod("get" + upperCase(fieldList.get(j).getName()));
+                        Integer val = (Integer) m.invoke(dataList.get(i));   //调用getter方法获取属性值
+                        if (val != null) {
+                            feature.SetField(j,val);
+                        } else {
+                            feature.SetFieldNull(j);
+                        }
+                    }else if ("class java.lang.Double".equals(fieldList.get(j).getGenericType().toString()) || "double".equals(fieldList.get(j).getGenericType().toString())) {
+                        Method m = c.getMethod("get" + upperCase(fieldList.get(j).getName()));
+                        Integer val = (Integer) m.invoke(dataList.get(i));   //调用getter方法获取属性值
+                        if (val != null) {
+                            feature.SetField(j,val);
+                        } else {
+                            feature.SetFieldNull(j);
+                        }
+                    }
+                }
+
+
+                Method m = c.getMethod("get" + upperCase(pointsName));
+                String val = (String) m.invoke(dataList.get(i));// 调用getter方法获取属性值
+                Geometry geometry = Geometry.CreateFromWkt(pointsToWktString("2",val));
+                feature.SetGeometry(geometry);
+                oLayer.CreateFeature(feature);
+
+            }
+
+
+            oLayer.SyncToDisk();
+            oDS.SyncToDisk();
+            oDS.delete();
+
+
+//            for (int i = 0; i < fields.length; i++) {
+//                Log.e("yimi", "createShpFile_属性名: " + fields[i].getName());
+//                Log.e("yimi", "createShpFile_类型: " + fields[i].getGenericType());
+//
+//                if ("class java.lang.String".equals(fields[i].getGenericType().toString())) {
+//                    Log.e("yimi", "createShpFile_字符类型: ");
+//                    try {
+//                        Method m = c.getMethod("get" + upperCase(fields[i].getName()));
+//
+//                        String val = (String) m.invoke(dataList.get(0));// 调用getter方法获取属性值
+//                        if (val != null) {
+//                            Log.i("yimi", "createShpFile: " + val);
+//                        }
+//                    } catch (Exception e) {
+//                        e.printStackTrace();
+//                    }
+//                }
+//            }
+
+
+            if (showAlertDialog) {
+                AlertDialogUtil.INSTANCE.showAlertDialog(context, "导出成功", "导出路径: " + shpPath);
+            }
+            return "导出成功";
+        }catch (Exception e) {
+            e.printStackTrace();
+            if (showAlertDialog) {
+                AlertDialogUtil.INSTANCE.showAlertDialog(context, "导出失败", "发生异常: " + e.getMessage());
+            }
+            return "发生异常: " + e.getMessage();
+        }
+    }
 
 
     /**
@@ -109,7 +398,10 @@ public class ShpFileUtils_Java {
                     index++;
                     Feature oFeatureTriangle = new Feature(oDefn);
                     oFeatureTriangle.SetField(0, index);
-                    oFeatureTriangle.SetField(1, new String(dataList.get(i).getRemark().getBytes(), StandardCharsets.UTF_8));
+
+                    //中文处理
+                    oFeatureTriangle.SetField(1, str2HexStr(dataList.get(i).getRemark(), "GBK"));
+//                    oFeatureTriangle.SetField(1, new String(dataList.get(i).getRemark().getBytes(), StandardCharsets.UTF_8));
                     oFeatureTriangle.SetField(2, new String(dataList.get(i).getNumber().getBytes(), StandardCharsets.UTF_8));
 
 
@@ -123,6 +415,10 @@ public class ShpFileUtils_Java {
                 oLayer.SyncToDisk();
                 oDS.SyncToDisk();
                 oDS.delete();
+
+
+
+                AlertDialogUtil.INSTANCE.showAlertDialog(context, "导出成功", "位置: " + shpPath);
 
                 Log.e("yimi", "createShp: 生成成功");
 
@@ -188,7 +484,7 @@ public class ShpFileUtils_Java {
                 } else {
                     result += "";
                 }
-                Log.e("yimi", "pointsToWktString(点): " + result);
+//                Log.e("yimi", "pointsToWktString(点): " + result);
                 return result;
             } else if ("1".equals(lType)) {
                 //线
@@ -235,7 +531,7 @@ public class ShpFileUtils_Java {
                 } else {
                     result += "";
                 }
-                Log.e("yimi", "pointsToWktString(线): " + result);
+//                Log.e("yimi", "pointsToWktString(线): " + result);
                 return result;
 
 
@@ -297,8 +593,30 @@ public class ShpFileUtils_Java {
 
     //https://blog.csdn.net/qq_34045114/article/details/84133815
     public static String str2HexStr(String origin,String charsetName) throws UnsupportedEncodingException {
+
+//        if (origin == null) {
+//            Log.e("yimi", "str2HexStr: origin == null");
+//        }
+//        if ("null".equals(origin)) {
+//            Log.e("yimi", "str2HexStr: origin == null 222222");
+//        }
+
+//        Log.e("yimi", "str2HexStr_origin: "+ origin + "  charsetName: " + charsetName);
+
         byte[] bytes = origin.getBytes(charsetName);
         String hex = bytesToHexString(bytes);
+
+//        Log.e("yimi", "str2HexStr_result: "+ hex );
+//
+//        if (hex == null || hex.isEmpty()) {
+//            Log.e("yimi", "str2HexStr: reeult is null" );
+//            return "";
+//        }
+//        if ("null".equals(hex)) {
+//            Log.e("yimi", "str2HexStr: reeult is null 222222222" );
+//            return "";
+//        }
+
         return hex;
     }
 
@@ -317,5 +635,118 @@ public class ShpFileUtils_Java {
         }
         return stringBuilder.toString();
     }
+
+
+    public static void test(){
+
+        List<Object> dataList = new ArrayList<>();
+        Map_Feature feature = new Map_Feature();
+        feature.setCodeId("333");
+        feature.setVillageName("44444");
+
+        feature.setPoints("119.38632499,28.15385465;119.38493879,28.15417115;119.38596560,28.15578788;119.38766841,28.15509499;119.38766841,28.15387175;119.38632499,28.15385465;#119.38649613,28.15417115;119.38691541,28.15434223;119.38714644,28.15482126;119.38653035,28.15509499;119.38579447,28.15454753;119.38649613,28.15417115;#119.38882601,28.15428938;119.38838533,28.15456311;119.38886879,28.15535009;119.38964746,28.15509774;119.38935225,28.15429793;119.38882601,28.15428938;#119.38848986,28.15534306;119.38739459,28.15601884;119.38831872,28.15707100;119.38899471,28.15658341;119.38890914,28.15564246;119.38848986,28.15534306;#119.38844708,28.15576222;119.38869522,28.15612149;119.38867811,28.15652353;119.38819037,28.15642088;119.38802779,28.15593330;119.38844708,28.15576222;");
+        feature.setIYear(2019);
+        feature.setFType("2");
+        dataList.add(feature);
+
+        createShpFile(Map_Feature.class,dataList);
+
+
+    }
+
+
+
+    public static void createShpFile(Class c,List<Object> dataList) {
+
+        Field[] fields = c.getDeclaredFields();
+
+        for (int i = 0; i < fields.length; i++) {
+            Log.e("yimi", "createShpFile_属性名: " + fields[i].getName());
+            Log.e("yimi", "createShpFile_类型: " + fields[i].getGenericType());
+
+            if ("class java.lang.String".equals(fields[i].getGenericType().toString())) {
+                Log.e("yimi", "createShpFile_字符类型: ");
+                try {
+                    Method m = c.getMethod("get" + upperCase(fields[i].getName()));
+
+                    String val = (String) m.invoke(dataList.get(0));// 调用getter方法获取属性值
+                    if (val != null) {
+                        Log.i("yimi", "createShpFile: " + val);
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+
+
+    }
+
+
+
+    // 把一个字符串的第一个字母大写、效率是最高的、
+  private static String getMethodName(String fildeName) throws Exception {
+      byte[] items = fildeName.getBytes();
+      items[0] = (byte) ((char) items[0] - 'a' + 'A');
+      return new String(items);
+  }
+
+    /**
+     * 把一个字符串的第一个字母大写
+     * @param str
+     * @return
+     */
+    public static String upperCase(String str) {
+        char[] ch = str.toCharArray();
+        if (ch[0] >= 'a' && ch[0] <= 'z') {
+            ch[0] = (char) (ch[0] - 32);
+        }
+        return new String(ch);
+    }
+
+
+    /**
+     * 类似 Double.parseDouble 方法,但处理了 null,空字符串等情况
+     * 说明:null/字符串/非数值等按照 0 返回
+     *
+     * @return
+     */
+    public static int parseInt(String value) {
+        if (value == null || value.isEmpty() || !isNumber_int(value)) {
+            return 0;
+        }
+        return Integer.parseInt(value);
+    }
+
+    /**
+     * 正则判断是否是数值(double或 int)
+     *
+     * @param str
+     * @return
+     */
+    public static boolean isNumber_int_double(String str) {
+        //采用正则表达式的方式来判断一个字符串是否为数字，这种方式判断面比较全
+        //可以判断正负、整数小数
+
+        boolean isInt = Pattern.compile("^-?[0-9]\\d*$").matcher(str).find();
+        boolean isDouble = Pattern.compile("^-?([0-9]\\d*\\.\\d*|0\\.\\d*[1-9]\\d*|0?\\.0+|0)$").matcher(str).find();
+        return isInt || isDouble;
+    }
+
+    /**
+     * 正则判断是否是数值(仅int)
+     *
+     * @param str
+     * @return
+     */
+    public static boolean isNumber_int(String str) {
+        if (str == null || str.isEmpty()) {
+            return false;
+        }
+        //采用正则表达式的方式来判断一个字符串是否为数字，这种方式判断面比较全
+        return Pattern.compile("^-?[0-9]\\d*$").matcher(str).find();
+    }
+
+
 
 }
