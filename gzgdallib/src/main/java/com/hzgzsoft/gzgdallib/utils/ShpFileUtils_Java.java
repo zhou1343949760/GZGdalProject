@@ -149,9 +149,9 @@ public class ShpFileUtils_Java {
                 //仅导出String int double 等类型(集合里面有些是方法名等不需要的,如 android.os.Parcelable$Creator<com.hzgzsoft.gzgdallib.model.Map_Feature> )
                 if (!("class java.lang.String".equals(fields[i].getGenericType().toString())
                         || "class java.lang.Integer".equals(fields[i].getGenericType().toString())
-//                        || "class java.lang.Double".equals(fields[i].getGenericType().toString())
+                        || "class java.lang.Double".equals(fields[i].getGenericType().toString())
                         || "int".equals(fields[i].getGenericType().toString())
-//                        || "double".equals(fields[i].getGenericType().toString())
+                        || "double".equals(fields[i].getGenericType().toString())
 //                        || "boolean".equals(fields[i].getGenericType().toString())
                 )) {
                     continue;
@@ -211,7 +211,7 @@ public class ShpFileUtils_Java {
 
                 } else if ("class java.lang.Double".equals(fieldList.get(i).getGenericType().toString()) || "double".equals(fieldList.get(i).getGenericType().toString())) {
                     Log.i("yimi", "createShpFile_double: " + fieldList.get(i).getName());
-                    FieldDefn oFieldName = new FieldDefn(new String(fieldList.get(i).getName().getBytes(), StandardCharsets.UTF_8), ogr.OFSTFloat32);
+                    FieldDefn oFieldName = new FieldDefn(new String(fieldList.get(i).getName().getBytes(), StandardCharsets.UTF_8), ogr.OFTReal);
                     oFieldName.SetNullable(1);
                     oLayer.CreateField(oFieldName);
 
@@ -237,10 +237,20 @@ public class ShpFileUtils_Java {
                         Method m = c.getMethod("get" + upperCase(fieldList.get(j).getName()));
                         String val = (String) m.invoke(dataList.get(i));// 调用getter方法获取属性值
                         if (val != null) {
+                            if (val.isEmpty()) {
+                            }
                             if (isforPC) {
-                                feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "GBK"));
+                                if (val.isEmpty()) {
+                                    feature.SetField(j,val);
+                                } else {
+                                    feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "GBK"));
+                                }
                             } else {
-                                feature.SetField(j, new String(val.getBytes(), StandardCharsets.UTF_8));
+                                if (val.isEmpty()) {
+                                    feature.SetField(j,val);
+                                } else {
+                                    feature.SetField(j, new String(val.getBytes(), StandardCharsets.UTF_8));
+                                }
                             }
                         } else {
                             if (isforPC) {
@@ -259,7 +269,7 @@ public class ShpFileUtils_Java {
                         }
                     }else if ("class java.lang.Double".equals(fieldList.get(j).getGenericType().toString()) || "double".equals(fieldList.get(j).getGenericType().toString())) {
                         Method m = c.getMethod("get" + upperCase(fieldList.get(j).getName()));
-                        Integer val = (Integer) m.invoke(dataList.get(i));   //调用getter方法获取属性值
+                        Double val = (Double) m.invoke(dataList.get(i));   //调用getter方法获取属性值
                         if (val != null) {
                             feature.SetField(j,val);
                         } else {
@@ -269,6 +279,7 @@ public class ShpFileUtils_Java {
                 }
 
 
+//                Log.e("yimi", "createShpByList_pointsName: "+ pointsName );
                 Method m = c.getMethod("get" + upperCase(pointsName));
                 String val = (String) m.invoke(dataList.get(i));// 调用getter方法获取属性值
                 Geometry geometry = Geometry.CreateFromWkt(pointsToWktString("2",val));
@@ -387,6 +398,14 @@ public class ShpFileUtils_Java {
                 oFieldName2.SetWidth(100);
                 oLayer.CreateField(oFieldName2);
 
+                // Int 测试
+                FieldDefn oFieldIyear = new FieldDefn("Iyear", ogr.OFTInteger);
+                oLayer.CreateField(oFieldIyear);
+
+                // double 测试
+                FieldDefn oFieldArea = new FieldDefn("Area", ogr.OFTReal);
+                oLayer.CreateField(oFieldArea);
+
 
                 int index = 0;
 
@@ -404,6 +423,9 @@ public class ShpFileUtils_Java {
 //                    oFeatureTriangle.SetField(1, new String(dataList.get(i).getRemark().getBytes(), StandardCharsets.UTF_8));
                     oFeatureTriangle.SetField(2, new String(dataList.get(i).getNumber().getBytes(), StandardCharsets.UTF_8));
 
+                    oFeatureTriangle.SetField(3, dataList.get(i).getIYear());
+
+                    oFeatureTriangle.SetField(4, dataList.get(i).getArea());
 
                     Geometry geomTriangle = Geometry.CreateFromWkt(pointsToWktString(dataList.get(i).getFType(), dataList.get(i).getPoints()));
 
