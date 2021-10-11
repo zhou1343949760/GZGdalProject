@@ -4,6 +4,7 @@ import android.app.Activity
 import android.os.Bundle
 import android.util.Log
 import com.hzgzsoft.gzgdallib.model.Map_Feature
+import com.hzgzsoft.gzgdallib.model.ZZYShp
 import com.hzgzsoft.gzgdallib.utils.ShpFileUtils_Java
 import kotlinx.android.synthetic.main.activity_main.*
 import java.util.*
@@ -70,23 +71,21 @@ class MainActivity : Activity() {
 
 
         val path:String = getExternalFilesDir("")!!.absolutePath  //android -> data -> 包名
-//        val path:String = Environment.getExternalStorageDirectory().absolutePath + "/GZSoftSLZY/Pj导出shp/"  //外部存储文件夹
 
 
-//        ShpFileUtils_Java.createShp_BySecond_Polygon(this, path,"测试数据_面.shp", dataList)
-//        ShpFileUtils.createShp_BySecond_Polygon(this,path,"测试数据_面06.shp",dataList)
-
-//        ShpFileUtils_Java.createShpFile(mapFeature01.javaClass, dataList as List<Any>?)
-//        ShpFileUtils_Java.test()
+        //根据类型自动生成属性字段(Map_Feature)
+//        ShpFileUtils_Java.createShpByList(this,path,"自动获取字段测试_feature.shp",dataList,
+//            true,false,null,null,null, null);
 
 
+        //导出征占格式测试(按照征占系统导入模板字段)
+        val zzyShp = ZZYShp()
+        zzyShp.points = "119.38326773,28.15695438;119.38227816,28.15726980;119.38305261,28.15816587;119.38437204,28.15804401;119.38381272,28.15726980;119.38326773,28.15695438;#119.38284465,28.15739166;119.38349720,28.15741317;119.38308846,28.15782895;119.38284465,28.15739166;"
+        val zzyShpList: ArrayList<Any> = ArrayList()
+        zzyShpList.add(zzyShp)
 
-        //根据类型自动生成属性字段(不能用,会闪退)
-        ShpFileUtils_Java.createShpByList(this,path,"自动获取字段测试_string_double_int.shp",mapFeature01.javaClass,dataList,
-            true,false,null,null,null,true)
-
-
-
+        ShpFileUtils_Java.createShpByList(this,path,"导出征占shp.shp",zzyShpList,
+            true,false,null,null,null, null);
 
 
     }

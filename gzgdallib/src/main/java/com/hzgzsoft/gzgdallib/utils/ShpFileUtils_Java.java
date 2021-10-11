@@ -16,6 +16,8 @@ import org.gdal.ogr.Layer;
 import org.gdal.ogr.ogr;
 
 import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -32,11 +34,23 @@ import java.util.regex.Pattern;
 public class ShpFileUtils_Java {
 
 
-
-
-    public static String createShpByList(Context context,String path,String fileName, Class c,
+    /**
+     * 传入Object集合,导出为shp
+     * @param context context
+     * @param path 生成shp文件的路径
+     * @param fileName 生成shp文件的文件名(.shp结尾,如果不是则自动补充)
+     * @param dataList 数据集合,必须有矢量数据字段(默认为points,如果是其他字段,通过pointsName字段指定)
+     * @param showAlertDialog 是否弹窗显示错误信息/生成结果等,可通过返回的string处理
+     * @param showProgressDialog 未实现  是否显示等待弹窗(如生成过程中显示正在生成数据)
+     * @param pointsName 矢量数据字段,传入null或空字符串,则设置为points
+     * @param ftypeName 矢量数据类型 0:点 1:线  2:面  传入null或空字符串,则设置为2:面   当前仅实现面数据导出
+     * @param excludeList 导出时需排除的字段,不需要排除则传入null或空集合
+     * @param format 未实现  导出数据的编码格式,实现后,请修改复制.cpg文件(说明数据编码格式)相关代码  可参考 https://blog.csdn.net/qq_34045114/article/details/84133815
+     * @return 结果信息,如 导出成功  path参数异常,导出失败
+     */
+    public static String createShpByList(Context context,String path,String fileName,
                                          List<Object> dataList,boolean showAlertDialog, boolean showProgressDialog,
-                                         String pointsName, String ftypeName, List<String> excludeList, boolean isforPC){
+                                         String pointsName, String ftypeName, List<String> excludeList, String format){
         try {
             if (path == null || path.isEmpty()) {
                 if (showAlertDialog) {
@@ -70,15 +84,18 @@ public class ShpFileUtils_Java {
                 return "传入数据为空,导出失败";
             }
 
-            if (c == null) {
-                if (showAlertDialog) {
-                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "传入class异常,导出失败");
-                }
-                return "传入class异常,导出失败";
-            }
 
             if (!fileName.endsWith(".shp")) {
                 fileName += ".shp";
+            }
+
+            Class c = dataList.get(0).getClass();
+
+            if (c == null) {
+                if (showAlertDialog) {
+                    AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "class数据异常,导出失败");
+                }
+                return "class数据异常,导出失败";
             }
 
 
@@ -110,7 +127,7 @@ public class ShpFileUtils_Java {
             }
             oDS.FlushCache();
             org.gdal.osr.SpatialReference srs = new org.gdal.osr.SpatialReference();
-            srs.ImportFromWkt("GEOGCS[\"GCS_China_Geodetic_Coordinate_System_2000\",DATUM[\"D_China_2000\",SPHEROID[\"CGCS_2000\",6378137,298.257222101]],PRIMEM[\"Greenwich\",0],UNIT[\"DEGREE\",0.017453292519943295]]");
+            srs.ImportFromWkt("GEOGCS[\"GCS_China_Geodetic_Coordinate_System_2000\",DATUM[\"D_China_2000\",SPHEROID[\"CGCS2000\",6378137.0,298.257222101]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]]");
             Layer oLayer = oDS.CreateLayer("1", srs, ogr.wkbPolygon, null);
             if (oLayer == null) {
                 if (showAlertDialog) {
@@ -237,27 +254,13 @@ public class ShpFileUtils_Java {
                         Method m = c.getMethod("get" + upperCase(fieldList.get(j).getName()));
                         String val = (String) m.invoke(dataList.get(i));// 调用getter方法获取属性值
                         if (val != null) {
-                            if (val.isEmpty()) {
-                            }
-                            if (isforPC) {
-                                if (val.isEmpty()) {
-                                    feature.SetField(j,val);
-                                } else {
-                                    feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "GBK"));
-                                }
-                            } else {
-                                if (val.isEmpty()) {
-                                    feature.SetField(j,val);
-                                } else {
-                                    feature.SetField(j, new String(val.getBytes(), StandardCharsets.UTF_8));
-                                }
-                            }
+
+                            //这两个方法需完善,当前不能传入空字符串,空字符串使用  feature.SetField(j,val);
+//                            feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "UTF-8"));
+//                            feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "GBK"));
+                            feature.SetField(j,val);
                         } else {
-                            if (isforPC) {
-                                feature.SetFieldNull(j);
-                            } else {
-                                feature.SetFieldNull(j);
-                            }
+                            feature.SetFieldNull(j);
                         }
                     } else if ("class java.lang.Integer".equals(fieldList.get(j).getGenericType().toString()) || "int".equals(fieldList.get(j).getGenericType().toString())) {
                         Method m = c.getMethod("get" + upperCase(fieldList.get(j).getName()));
@@ -313,6 +316,9 @@ public class ShpFileUtils_Java {
 //                }
 //            }
 
+            //替换.prj(代码生成的在平台导入时会提示不支持自定义坐标系)  放入.cpg(说明编码格式为utf-8)
+            replaceFiles(context,path,fileName.replace(".shp",""));
+
 
             if (showAlertDialog) {
                 AlertDialogUtil.INSTANCE.showAlertDialog(context, "导出成功", "导出路径: " + shpPath);
@@ -324,6 +330,39 @@ public class ShpFileUtils_Java {
                 AlertDialogUtil.INSTANCE.showAlertDialog(context, "导出失败", "发生异常: " + e.getMessage());
             }
             return "发生异常: " + e.getMessage();
+        }
+    }
+
+    /**
+     * 替换.prj(代码生成的在平台导入时会提示不支持自定义坐标系)  放入.cpg(说明编码格式为utf-8)
+     * @return
+     */
+    private static boolean replaceFiles (Context context,String path,String name){
+        try {
+            InputStream isCPG = context.getResources().getAssets().open("ZZY.cpg");//欲导入的数据库
+            FileOutputStream fosCPG = new FileOutputStream(path + name + ".cpg");
+            byte[] bufferCPG = new byte[1024 * 10];
+            int countCPG;
+            while ((countCPG = isCPG.read(bufferCPG)) > 0) {
+                fosCPG.write(bufferCPG, 0, countCPG);
+            }
+            fosCPG.close();
+            isCPG.close();
+
+            InputStream isPRJ = context.getResources().getAssets().open("ZZY.prj");//欲导入的数据库
+            FileOutputStream fosPRJ = new FileOutputStream(path + name + ".prj");
+            byte[] bufferPRJ = new byte[1024 * 10];
+            int count;
+            while ((count = isPRJ.read(bufferPRJ)) > 0) {
+                fosPRJ.write(bufferPRJ, 0, count);
+            }
+            fosPRJ.close();
+            isPRJ.close();
+
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return false;
         }
     }
 
