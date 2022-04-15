@@ -7,7 +7,7 @@ package com.hzgzsoft.gzgdallib.model;
 public class ZZYShp {
 
     private String Points;
-    private String FType = "2";
+    private String FType = "1";
 
     private String XIAN = "331181";
     private String XIANG = "001";

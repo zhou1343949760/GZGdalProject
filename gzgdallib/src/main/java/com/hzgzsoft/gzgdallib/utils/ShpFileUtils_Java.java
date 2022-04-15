@@ -50,7 +50,7 @@ public class ShpFileUtils_Java {
      */
     public static String createShpByList(Context context,String path,String fileName,
                                          List<Object> dataList,boolean showAlertDialog, boolean showProgressDialog,
-                                         String pointsName, String ftypeName, List<String> excludeList, String format){
+                                         String pointsName, String ftypeName, List<String> excludeList, String format, String ftype){
         try {
             if (path == null || path.isEmpty()) {
                 if (showAlertDialog) {
@@ -128,8 +128,17 @@ public class ShpFileUtils_Java {
             oDS.FlushCache();
             org.gdal.osr.SpatialReference srs = new org.gdal.osr.SpatialReference();
             srs.ImportFromWkt("GEOGCS[\"GCS_China_Geodetic_Coordinate_System_2000\",DATUM[\"D_China_2000\",SPHEROID[\"CGCS2000\",6378137.0,298.257222101]],PRIMEM[\"Greenwich\",0.0],UNIT[\"Degree\",0.0174532925199433]]");
-            Layer oLayer = oDS.CreateLayer("1", srs, ogr.wkbPolygon, null);
-            if (oLayer == null) {
+
+            Layer oLayer;
+            if ("0".equals(ftype)) {
+                oLayer = oDS.CreateLayer("1", srs, ogr.wkbPoint, null);
+            } else if ("1".equals(ftype)) {
+                oLayer = oDS.CreateLayer("1", srs, ogr.wkbLineString, null);
+            }else {
+                oLayer = oDS.CreateLayer("1", srs, ogr.wkbPolygon, null);
+            }
+
+                if (oLayer == null) {
                 if (showAlertDialog) {
                     AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "图层创建失败,导出失败");
                 }
@@ -285,7 +294,7 @@ public class ShpFileUtils_Java {
 //                Log.e("yimi", "createShpByList_pointsName: "+ pointsName );
                 Method m = c.getMethod("get" + upperCase(pointsName));
                 String val = (String) m.invoke(dataList.get(i));// 调用getter方法获取属性值
-                Geometry geometry = Geometry.CreateFromWkt(pointsToWktString("2",val));
+                Geometry geometry = Geometry.CreateFromWkt(pointsToWktString(ftype,val));
                 feature.SetGeometry(geometry);
                 oLayer.CreateFeature(feature);
 
