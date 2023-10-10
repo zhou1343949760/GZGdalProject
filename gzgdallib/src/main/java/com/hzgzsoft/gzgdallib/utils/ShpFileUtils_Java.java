@@ -134,11 +134,14 @@ public class ShpFileUtils_Java {
                 oLayer = oDS.CreateLayer("1", srs, ogr.wkbPoint, null);
             } else if ("1".equals(ftype)) {
                 oLayer = oDS.CreateLayer("1", srs, ogr.wkbLineString, null);
-            }else {
+            } else if ("2".equals(ftype)) {
                 oLayer = oDS.CreateLayer("1", srs, ogr.wkbPolygon, null);
+            } else {
+                //多点  实际值为4
+                oLayer = oDS.CreateLayer("1", srs, ogr.wkbMultiPoint, null);
             }
 
-                if (oLayer == null) {
+            if (oLayer == null) {
                 if (showAlertDialog) {
                     AlertDialogUtil.INSTANCE.showAlertDialog(context, "提示", "图层创建失败,导出失败");
                 }
@@ -264,10 +267,16 @@ public class ShpFileUtils_Java {
                         String val = (String) m.invoke(dataList.get(i));// 调用getter方法获取属性值
                         if (val != null) {
 
+                            // 2023/10/09 这个处理是中文乱码的核心处理部分,增加空值判断使用(待测试核实:印象中设置为utf-8则导出的数据放到平板正常,arcgis乱码;设置为GBK则平板乱码,arcgis正常;是否因为后面的替换cpg方法固定使用utf-8导致)
                             //这两个方法需完善,当前不能传入空字符串,空字符串使用  feature.SetField(j,val);
 //                            feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "UTF-8"));
 //                            feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "GBK"));
-                            feature.SetField(j,val);
+                            if (val.isEmpty()) {
+                                feature.SetField(j,val);
+                            } else {
+                                //20231010 简单测试过.后面的替换cpg方法没修改,这里写 UTF-8,则arcgis乱码,平板正常;GBK则arcgis正常,平板乱码;这里暂时设置为GBK
+                                feature.SetFieldBinaryFromHexString(j, str2HexStr(val, "GBK"));
+                            }
                         } else {
                             feature.SetFieldNull(j);
                         }
@@ -534,8 +543,9 @@ public class ShpFileUtils_Java {
                         if (data2[j].isEmpty()) {
                             continue;
                         }
+                        //20230418 碳汇小班存在三维数据,类似: 121.34774416100024,28.757849576000176,0.0;121.34776483300004,28.757840333000054,0.0; !=2 改为 < 2
                         String[] point = data2[j].split(",");
-                        if (point.length != 2) {
+                        if (point.length < 2) {
                             continue;
                         }
                         result += point[0] + " " + point[1] + ",";
@@ -581,8 +591,9 @@ public class ShpFileUtils_Java {
                         if (data2[j].isEmpty()) {
                             continue;
                         }
+                        //20230418 碳汇小班存在三维数据,类似: 121.34774416100024,28.757849576000176,0.0;121.34776483300004,28.757840333000054,0.0; !=2 改为 < 2
                         String[] point = data2[j].split(",");
-                        if (point.length != 2) {
+                        if (point.length < 2) {
                             continue;
                         }
                         result += point[0] + " " + point[1] + ",";
@@ -605,6 +616,54 @@ public class ShpFileUtils_Java {
                 return result;
 
 
+            } else if("3".equals(lType)){
+                //点
+                if (points == null || points.isEmpty()) {
+                    return "";
+                }
+                String result = "";
+//                POINT (30 10)
+//                MULTIPOINT ((10 40), (40 30), (20 20), (30 10))
+                if (points.contains("#")) {
+                    result += "MULTIPOINT (";
+                } else {
+                    result += "POINT ";
+                }
+                String[] data = points.split("#");
+
+                for (int i = 0; i < data.length; i++) {
+                    if (data[i].isEmpty()) {
+                        continue;
+                    }
+                    result += "(";
+                    String[] data2 = data[i].split(";");
+                    for (int j = 0; j < data2.length; j++) {
+                        if (data2[j].isEmpty()) {
+                            continue;
+                        }
+                        //20230418 碳汇小班存在三维数据,类似: 121.34774416100024,28.757849576000176,0.0;121.34776483300004,28.757840333000054,0.0; !=2 改为 < 2
+                        String[] point = data2[j].split(",");
+                        if (point.length < 2) {
+                            continue;
+                        }
+                        result += point[0] + " " + point[1] + ",";
+                    }
+
+                    if (result.endsWith(",")) {
+                        result = result.substring(0, result.length() - 1);
+                    }
+                    result += "),";
+                }
+                if (result.endsWith(",")) {
+                    result = result.substring(0, result.length() - 1);
+                }
+                if (points.contains("#")) {
+                    result += ")";
+                } else {
+                    result += "";
+                }
+//                Log.e("yimi", "pointsToWktString(点): " + result);
+                return result;
             } else {
                 //面
                 if (points == null || points.isEmpty()) {
@@ -630,8 +689,9 @@ public class ShpFileUtils_Java {
                         if (data2[j].isEmpty()) {
                             continue;
                         }
+                        //20230418 碳汇小班存在三维数据,类似: 121.34774416100024,28.757849576000176,0.0;121.34776483300004,28.757840333000054,0.0; !=2 改为 < 2
                         String[] point = data2[j].split(",");
-                        if (point.length != 2) {
+                        if (point.length < 2) {
                             continue;
                         }
                         result += point[0] + " " + point[1] + ",";
@@ -650,7 +710,7 @@ public class ShpFileUtils_Java {
                 } else {
                     result += ")";
                 }
-                Log.e("yimi", "pointsToWktString(面): " + result);
+//                Log.e("yimi", "pointsToWktString(面): " + result);
                 return result;
             }
         } catch (Exception e) {
@@ -755,11 +815,11 @@ public class ShpFileUtils_Java {
 
 
     // 把一个字符串的第一个字母大写、效率是最高的、
-  private static String getMethodName(String fildeName) throws Exception {
-      byte[] items = fildeName.getBytes();
-      items[0] = (byte) ((char) items[0] - 'a' + 'A');
-      return new String(items);
-  }
+    private static String getMethodName(String fildeName) throws Exception {
+        byte[] items = fildeName.getBytes();
+        items[0] = (byte) ((char) items[0] - 'a' + 'A');
+        return new String(items);
+    }
 
     /**
      * 把一个字符串的第一个字母大写
